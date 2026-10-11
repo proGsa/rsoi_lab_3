@@ -34,7 +34,7 @@ def get_with_circuit_breaker(url: str, breaker: CircuitBreaker, fallback, critic
         if critical:
             raise HTTPException(
                 status_code=503,
-                detail="Bonus Service unavailable",
+                content={"message": "Bonus Service unavailable"},
             )
         return fallback
 
@@ -45,7 +45,7 @@ def get_with_circuit_breaker(url: str, breaker: CircuitBreaker, fallback, critic
             if critical:
                 raise HTTPException(
                     status_code=503,
-                    detail="Bonus Service unavailable",
+                    content={"message": "Bonus Service unavailable"},
                 )
             return fallback
         breaker.record_success()
@@ -64,7 +64,7 @@ def get_with_circuit_breaker(url: str, breaker: CircuitBreaker, fallback, critic
         if critical:
             raise HTTPException(
                 status_code=503,
-                detail="Bonus Service unavailable",
+                content={"message": "Bonus Service unavailable"},
             )
         return fallback
 
