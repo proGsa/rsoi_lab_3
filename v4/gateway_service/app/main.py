@@ -33,7 +33,7 @@ def get_with_circuit_breaker(url: str, breaker: CircuitBreaker, fallback, critic
     if not breaker.can_execute(): 
         if critical:
             raise HTTPException(
-                status_code=500,
+                status_code=503,
                 detail="Upstream service is unavailable",
             )
         return fallback
@@ -44,7 +44,7 @@ def get_with_circuit_breaker(url: str, breaker: CircuitBreaker, fallback, critic
             breaker.record_failure()
             if critical:
                 raise HTTPException(
-                    status_code=500,
+                    status_code=503,
                     detail="Upstream service is unavailable",
                 )
             return fallback
@@ -63,7 +63,7 @@ def get_with_circuit_breaker(url: str, breaker: CircuitBreaker, fallback, critic
         breaker.record_failure()
         if critical:
             raise HTTPException(
-                status_code=500,
+                status_code=503,
                 detail="Upstream service is unavailable",
             )
         return fallback
