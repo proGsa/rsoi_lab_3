@@ -43,27 +43,48 @@ def process_operation(operation: dict):
     else: 
         raise ValueError(f"Unknown operation: {operation_type}")
 
-def process_return_library(operation: dict): 
-    print(f"Processing RETURN_LIBRARY: {operation}") 
-    library_uid = operation["libraryUid"] 
-    book_uid = operation["bookUid"] 
-    user = operation["user"] 
-    new_stars = operation["newStars"] 
-    # Повторяем возврат книги при ошибке. 
-    response = httpx.post( f"{LIBRARY_SERVICE_URL}/api/v1/libraries/" f"{library_uid}/books/{book_uid}/return", timeout=5.0, ) 
-    if response.status_code not in (200, 204): 
-        raise RuntimeError( f"Library Service returned {response.status_code}" ) 
-    print("Library return completed") 
-    # Книга уже возвращена. Повторно её не возвращаем, даже если обновление рейтинга не удалось. 
-    try: 
-        response = httpx.patch( f"{RATING_SERVICE_URL}/api/v1/rating", headers={"X-User-Name": user}, json={"stars": new_stars}, timeout=5.0, )
-        if response.status_code not in (200, 204): 
-            raise RuntimeError( f"Rating Service returned {response.status_code}" ) 
-        print("Rating update completed") 
-    except (httpx.RequestError, RuntimeError) as error: 
-        print(f"Rating update failed: {error}") 
-        # Ставим в очередь только изменение рейтинга. 
-        publish_operation({ "operation": "UPDATE_RATING", "user": user, "newStars": new_stars, })
+
+def process_return_library(operation: dict):
+    print(f"Processing RETURN_LIBRARY: {operation}")
+
+    reservation_uid = operation["reservationUid"]
+    user = operation["user"]
+    condition = operation["condition"]
+    return_date = operation["date"]
+    headers = {"X-User-Name": user}
+
+    # Получаем данные бронирования.
+    response = httpx.get(
+        f"{RESERVATION_SERVICE_URL}/api/v1/reservations/{reservation_uid}",
+        headers=headers,
+        timeout=5.0,
+    )
+
+    if response.status_code != 200:
+        raise RuntimeError(f"Reservation Service returned {response.status_code}")
+
+    reservation = response.json()
+    library_uid = reservation["libraryUid"]
+    book_uid = reservation["bookUid"]
+
+    retry_request_until_success(
+        method="POST",
+        url=(
+            f"{LIBRARY_SERVICE_URL}/api/v1/libraries/"
+            f"{library_uid}/books/{book_uid}/return"
+        ),
+        retry_time=10.0,
+        timeout=2.0,
+    )
+
+    print("Library return completed")
+
+    publish_operation({
+        "operation": "UPDATE_RATING_DELTA",
+        "user": user,
+        "delta": operation.get("delta", 1),
+    })
+
        
 def process_return(operation: dict):
     print(f"Processing RETURN_RESERVATION: {operation}")

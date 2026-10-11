@@ -585,35 +585,13 @@ def return_reservation(reservation_uid: UUID, body: ReturnRequest, x_user_name: 
             timeout=5.0,
         )
     except httpx.RequestError:
-        raise HTTPException(
-            status_code=503,
-            detail="Reservation Service is unavailable",
-        )
+        raise HTTPException(status_code=503, detail="Reservation Service is unavailable",)
 
     if status_response.status_code not in (200, 204):
         raise HTTPException(
             status_code=status_response.status_code,
             detail=status_response.text,
         )
-
-    try:
-        status_response = httpx.post(
-            f"{RESERVATION_SERVICE_URL}/api/v1/reservations/"
-            f"{reservation_uid}/return",
-            headers=headers,
-            json=body.model_dump(mode="json"),
-            timeout=5.0,
-        )
-    except httpx.RequestError:
-        raise HTTPException(
-            status_code=503,
-            detail="Reservation Service is unavailable",
-        )
-
-    if status_response.status_code not in (200, 204):
-        raise HTTPException(
-            status_code=status_response.status_code,
-            detail=status_response.text,)
 
     try:
         library_response = httpx.post(
@@ -634,6 +612,7 @@ def return_reservation(reservation_uid: UUID, body: ReturnRequest, x_user_name: 
             "user": x_user_name,
             "condition": body.condition,
             "date": body.date.isoformat(),
+            "delta": delta,
         })
         return Response(status_code=204)
 
