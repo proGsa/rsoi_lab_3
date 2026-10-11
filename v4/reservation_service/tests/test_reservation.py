@@ -226,3 +226,35 @@ def test_return_reservation_already_returned():
     assert response.status_code == 400
     assert response.json()["detail"] == "Reservation is not active"
     db.commit.assert_not_called()
+
+def test_delete_reservation():
+    reservation = make_reservation()
+
+    db = MagicMock()
+    db.query.return_value.filter.return_value.first.return_value = reservation
+    app.dependency_overrides[get_db] = lambda: db
+
+    response = client.delete(
+        f"/api/v1/reservations/{reservation.reservation_uid}",
+        headers={"X-User-Name": "test_user"},
+    )
+
+    assert response.status_code == 204
+    db.delete.assert_called_once_with(reservation)
+    db.commit.assert_called_once()
+
+
+def test_delete_reservation_not_found():
+    db = MagicMock()
+    db.query.return_value.filter.return_value.first.return_value = None
+    app.dependency_overrides[get_db] = lambda: db
+
+    response = client.delete(
+        f"/api/v1/reservations/{uuid4()}",
+        headers={"X-User-Name": "test_user"},
+    )
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Reservation not found"
+    db.delete.assert_not_called()
+    db.commit.assert_not_called()

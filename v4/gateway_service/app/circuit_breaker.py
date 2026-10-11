@@ -1,6 +1,8 @@
 import threading
 import time
 from enum import Enum
+import time
+import httpx
 
 
 class CircuitState(str, Enum):
@@ -10,69 +12,67 @@ class CircuitState(str, Enum):
 
 
 class CircuitBreaker:
-    def __init__(self, service: str, failure_threshold: int = 3, recovery_timeout: float = 10.0, clock=time.monotonic):
-        self.service = service
-        self.failure_threshold = max(1, failure_threshold)
+    def __init__(self, failure_threshold: int = 3, recovery_timeout: float = 10.0):
+        self.failure_threshold = failure_threshold
         self.recovery_timeout = recovery_timeout
-        self._clock = clock
-        self._lock = threading.Lock()
-        self._state = CircuitState.CLOSED
-        self._failures = 0
-        self._opened_at = 0.0
-        self._trial_in_flight = False
 
-    @property
-    def state(self) -> CircuitState:
-        with self._lock:
-            self._half_open_if_expired()
-            return self._state
+        self.failure_count = 0
+        self.state = CircuitState.CLOSED
+        self.opened_at = None
 
-    def acquire(self) -> bool:
-        with self._lock:
-            self._half_open_if_expired()
-
-            if self._state is CircuitState.OPEN:
-                return False
-
-            if self._state is CircuitState.HALF_OPEN:
-                if self._trial_in_flight:
-                    return False
-                self._trial_in_flight = True
-
+    def can_execute(self):
+        if self.state == CircuitState.CLOSED:
             return True
 
-    def record_success(self) -> None:
-        with self._lock:
-            self._state = CircuitState.CLOSED
-            self._failures = 0
-            self._trial_in_flight = False
+        if self.state == CircuitState.OPEN:
+            if time.monotonic() - self.opened_at >= self.recovery_timeout:
+                self.state = CircuitState.HALF_OPEN
+                print("Circuit state: HALF_OPEN")
+                return True
 
-    def record_failure(self) -> None:
-        with self._lock:
-            if self._state is CircuitState.HALF_OPEN:
-                self._trip()
-                return
+            print("Circuit state: OPEN -> fallback")
+            return False
 
-            self._failures += 1
-            if self._failures >= self.failure_threshold:
-                self._trip()
+        # HALF_OPEN
+        return True
+    
+    def record_success(self):
+        self.failure_count = 0
+        self.state = CircuitState.CLOSED
+        self.opened_at = None
+        print("Circuit state: CLOSED")
 
-    def _half_open_if_expired(self) -> None:
-        if self._state is not CircuitState.OPEN:
-            return
-
-        if (self._clock() - self._opened_at) >= self.recovery_timeout:
-            self._state = CircuitState.HALF_OPEN
-            self._trial_in_flight = False
-
-    def _trip(self) -> None:
-        self._state = CircuitState.OPEN
-        self._opened_at = self._clock()
-        self._failures = self.failure_threshold
-        self._trial_in_flight = False
-
-    def __repr__(self) -> str: 
-        return (
-            f"CircuitBreaker({self.service!r}, state={self.state.value}, "
-            f"failures={self._failures}/{self.failure_threshold})"
+    def record_failure(self):
+        self.failure_count += 1
+        print(
+            f"Circuit failure: "
+            f"{self.failure_count}/{self.failure_threshold}"
         )
+
+        if self.failure_count >= self.failure_threshold:
+            self.state = CircuitState.OPEN
+            self.opened_at = time.monotonic()
+            print("Circuit state: OPEN")
+
+def retry_request_until_success(method: str, url: str, headers: dict | None = None, json: dict | None = None, timeout: float = 5.0, retry_time: float = 10.0,):
+    start_time = time.time()
+
+    while time.time() - start_time < retry_time:
+        try:
+            response = httpx.request(
+                method=method,
+                url=url,
+                headers=headers,
+                json=json,
+                timeout=timeout,
+            )
+
+            if response.status_code in (200, 204):
+                return response
+
+        except httpx.RequestError:
+            pass
+
+        time.sleep(1)
+
+    raise HTTPException(status_code=500, detail="Upstream service is unavailable")

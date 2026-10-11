@@ -88,6 +88,21 @@ def return_reservation(reservation_uid: str, request: schemas.ReturnRequest, x_u
 
     return Response(status_code=204)
 
+@app.post("/api/v1/reservations/{reservation_uid}/rollback")
+def rollback_reservation(reservation_uid: UUID, x_user_name: str = Header(...), db: Session = Depends(get_db),):
+    reservation = (
+        db.query(models.Reservation)
+        .filter(models.Reservation.reservation_uid == reservation_uid, models.Reservation.username == x_user_name,).first()
+    )
+
+    if reservation is None:
+        raise HTTPException(status_code=404, detail="Reservation not found",)
+
+    reservation.status = "RENTED"
+    db.commit()
+
+    return Response(status_code=204)
+
 @app.get("/api/v1/reservations/{reservation_uid}", response_model=schemas.ReservationResponse)
 def get_reservation(reservation_uid: UUID, x_user_name: str = Header(...), db: Session = Depends(get_db)):
     reservation = (
@@ -111,3 +126,26 @@ def get_reservation(reservation_uid: UUID, x_user_name: str = Header(...), db: S
         "libraryUid": reservation.library_uid,
         "status": reservation.status,
     }
+
+@app.delete("/api/v1/reservations/{reservation_uid}")
+def delete_reservation(reservation_uid: UUID, x_user_name: str = Header(...), db: Session = Depends(get_db),
+):
+    reservation = (
+        db.query(models.Reservation)
+        .filter(
+            models.Reservation.reservation_uid == reservation_uid,
+            models.Reservation.username == x_user_name,
+        )
+        .first()
+    )
+
+    if reservation is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Reservation not found",
+        )
+
+    db.delete(reservation)
+    db.commit()
+
+    return Response(status_code=204)

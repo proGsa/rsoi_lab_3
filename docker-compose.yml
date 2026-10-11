@@ -1,4 +1,3 @@
-version: "3"
 services:
   postgres:
     image: library/postgres:13
@@ -48,16 +47,42 @@ services:
     depends_on:
       - postgres
 
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: rabbitmq
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+
   gateway-service:
     build: ./v4/gateway_service
     container_name: gateway-service
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8080
     ports:
       - "8080:8080"
     environment:
       LIBRARY_SERVICE_URL: http://library-service:8060
       RESERVATION_SERVICE_URL: http://reservation-service:8070
       RATING_SERVICE_URL: http://rating-service:8050
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
     depends_on:
+      - library-service
+      - reservation-service
+      - rating-service
+      - rabbitmq
+
+  queue-worker:
+    build: ./v4/gateway_service
+    container_name: queue-worker
+    command: python -m app.worker
+    environment:
+      PYTHONUNBUFFERED: "1"
+      LIBRARY_SERVICE_URL: http://library-service:8060
+      RESERVATION_SERVICE_URL: http://reservation-service:8070
+      RATING_SERVICE_URL: http://rating-service:8050
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
+    depends_on:
+      - rabbitmq
       - library-service
       - reservation-service
       - rating-service
