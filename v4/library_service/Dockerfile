@@ -10,4 +10,4 @@ COPY app ./app
 
 EXPOSE 8060
 
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8060"]
+CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8060}"]
