@@ -17,7 +17,22 @@ jobs:
 
       - uses: docker/setup-buildx-action@v2
 
-      # TODO build and run unit tests
+      - name: Install dependencies
+        env:
+          PYTHONPATH: ${{ github.workspace }}
+        run: |
+          pip install -r v4/library_service/requirements.txt 
+          pip install -r v4/reservation_service/requirements.txt
+          pip install -r v4/rating_service/requirements.txt
+          pip install -r v4/gateway_service/requirements.txt
+      
+      - name: Run unit tests
+        env:
+          PYTHONPATH: ${{ github.workspace }}
+        run: |
+          pytest v4/library_service/tests
+          pytest v4/reservation_service/tests
+          pytest v4/rating_service/tests
 
       - name: Build images
         timeout-minutes: 10
