@@ -137,9 +137,7 @@ def process_create(operation: dict):
     )
 
     if response.status_code != 200:
-        raise RuntimeError(
-            f"Reservation Service returned {response.status_code}"
-        )
+        raise RuntimeError(f"Reservation Service returned {response.status_code}")
 
     print("CREATE_RESERVATION completed")
 

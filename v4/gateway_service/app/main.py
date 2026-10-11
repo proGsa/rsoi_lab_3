@@ -585,7 +585,17 @@ def return_reservation(reservation_uid: UUID, body: ReturnRequest, x_user_name: 
     )
 
     if isinstance(rating_data, Response):
-        raise HTTPException(status_code=500, detail="Rating Service is unavailable",)
+        if rating_data.status_code >= 500:
+            publish_operation({
+                "operation": "RETURN_RESERVATION",
+                "reservationUid": str(reservation_uid),
+                "user": x_user_name,
+                "condition": body.condition,
+                "date": body.date.isoformat(),
+            })
+            return Response(status_code=204)
+
+        return rating_data
 
     new_stars = max(1, min(100, rating_data["stars"] + delta))
 

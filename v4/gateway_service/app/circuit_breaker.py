@@ -3,6 +3,7 @@ import time
 from enum import Enum
 import time
 import httpx
+from fastapi import HTTPException
 
 
 class CircuitState(str, Enum):
