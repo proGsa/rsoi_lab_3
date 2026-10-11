@@ -32,7 +32,7 @@ class ReturnRequest(BaseModel):
 def get_with_circuit_breaker(url: str, breaker: CircuitBreaker, fallback, critical: bool = True, params: dict | None = None, headers: dict | None = None, ): 
     if not breaker.can_execute(): 
         if critical:
-            raise HTTPException(
+            return JSONResponse(
                 status_code=503,
                 content={"message": "Bonus Service unavailable"},
             )
@@ -43,7 +43,7 @@ def get_with_circuit_breaker(url: str, breaker: CircuitBreaker, fallback, critic
         if response.status_code >= 500:
             breaker.record_failure()
             if critical:
-                raise HTTPException(
+                return JSONResponse(
                     status_code=503,
                     content={"message": "Bonus Service unavailable"},
                 )
@@ -62,7 +62,7 @@ def get_with_circuit_breaker(url: str, breaker: CircuitBreaker, fallback, critic
     except httpx.RequestError:
         breaker.record_failure()
         if critical:
-            raise HTTPException(
+            return JSONResponse(
                 status_code=503,
                 content={"message": "Bonus Service unavailable"},
             )
@@ -586,6 +586,7 @@ def return_reservation(reservation_uid: UUID, body: ReturnRequest, x_user_name: 
 
     if isinstance(rating_data, Response):
         raise HTTPException(status_code=500, detail="Rating Service is unavailable",)
+
     new_stars = max(1, min(100, rating_data["stars"] + delta))
 
     try:
