@@ -267,7 +267,7 @@ def create_reservation(body: ReservationRequest, x_user_name: str = Header(..., 
     )
     if isinstance(rating_response, Response):
         return rating_response
-        
+
     stars = rating_response["stars"]
     
     reservations = get_with_circuit_breaker(
@@ -531,32 +531,29 @@ def return_reservation(reservation_uid: UUID, body: ReturnRequest, x_user_name: 
 
     till_date = to_date(reservation["tillDate"])
     return_date = to_date(body.date)
-    try:
-        books = get_with_circuit_breaker(
-            url=f"{LIBRARY_SERVICE_URL}/api/v1/libraries/{library_uid}/books",
-            params={
-                "page": 1,
-                "size": 100,
-                "showAll": True,
-            },
-            breaker=library_breaker,
-            fallback={},
-            critical=True,
-        )
-    except HTTPException as error:
-        if error.status_code != 500:
-            raise
 
-        publish_operation({
-            "operation": "RETURN_RESERVATION",
-            "reservationUid": str(reservation_uid),
-            "user": x_user_name,
-            "condition": body.condition,
-            "date": body.date.isoformat(),
-        })
-        return Response(status_code=204)
-        
+    books = get_with_circuit_breaker(
+        url=f"{LIBRARY_SERVICE_URL}/api/v1/libraries/{library_uid}/books",
+        params={
+            "page": 1,
+            "size": 100,
+            "showAll": True,
+        },
+        breaker=library_breaker,
+        fallback={},
+        critical=True,
+    )
     if isinstance(books, Response):
+        if books.status_code >= 500:
+            publish_operation({
+                "operation": "RETURN_RESERVATION",
+                "reservationUid": str(reservation_uid),
+                "user": x_user_name,
+                "condition": body.condition,
+                "date": body.date.isoformat(),
+            })
+            return Response(status_code=204)
+
         return books
 
     book = next(
