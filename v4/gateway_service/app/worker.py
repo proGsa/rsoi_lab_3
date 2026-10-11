@@ -34,11 +34,10 @@ def process_operation(operation: dict):
     operation_type = operation["operation"] 
     if operation_type == "RETURN_LIBRARY": 
         process_return_library(operation) 
-
     elif operation_type == "RETURN_RESERVATION":
         process_return(operation)
-    elif operation_type == "UPDATE_RATING": 
-        process_update_rating(operation) 
+    elif operation_type == "UPDATE_RATING_DELTA":
+        process_update_rating_delta(operation)
     elif operation_type == "CREATE_RESERVATION": 
         process_create(operation) 
     else: 
@@ -112,13 +111,34 @@ def process_return(operation: dict):
 
     print("RETURN_RESERVATION completed")
 
+def process_update_rating_delta(operation: dict):
+    user = operation["user"]
+    delta = operation["delta"]
+    headers = {"X-User-Name": user}
 
-def process_update_rating(operation: dict): 
-    print(f"Processing UPDATE_RATING: {operation}") 
-    response = httpx.patch( f"{RATING_SERVICE_URL}/api/v1/rating", headers={"X-User-Name": operation["user"]}, json={"stars": operation["newStars"]}, timeout=5.0, ) 
-    if response.status_code not in (200, 204): 
-        raise RuntimeError( f"Rating Service returned {response.status_code}" ) 
-    print("UPDATE_RATING completed")
+    response = httpx.get(
+        f"{RATING_SERVICE_URL}/api/v1/rating",
+        headers=headers,
+        timeout=5.0,
+    )
+
+    if response.status_code != 200:
+        raise RuntimeError(f"Rating Service returned {response.status_code}")
+
+    stars = response.json()["stars"]
+    new_stars = max(1, min(100, stars + delta))
+
+    response = httpx.patch(
+        f"{RATING_SERVICE_URL}/api/v1/rating",
+        headers=headers,
+        json={"stars": new_stars},
+        timeout=5.0,
+    )
+
+    if response.status_code not in (200, 204):
+        raise RuntimeError(f"Rating Service returned {response.status_code}")
+
+    print("UPDATE_RATING_DELTA completed")
 
 def process_create(operation: dict):
     print(f"Processing CREATE_RESERVATION: {operation}")

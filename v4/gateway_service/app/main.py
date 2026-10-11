@@ -576,28 +576,25 @@ def return_reservation(reservation_uid: UUID, body: ReturnRequest, x_user_name: 
     if condition_changed:
         delta = -10
         
-    rating_data = get_with_circuit_breaker(
-        url=f"{RATING_SERVICE_URL}/api/v1/rating",
-        headers=headers,
-        breaker=rating_breaker,
-        fallback={},
-        critical=True,
-    )
+    try:
+        status_response = httpx.post(
+            f"{RESERVATION_SERVICE_URL}/api/v1/reservations/"
+            f"{reservation_uid}/return",
+            headers=headers,
+            json=body.model_dump(mode="json"),
+            timeout=5.0,
+        )
+    except httpx.RequestError:
+        raise HTTPException(
+            status_code=503,
+            detail="Reservation Service is unavailable",
+        )
 
-    if isinstance(rating_data, Response):
-        if rating_data.status_code >= 500:
-            publish_operation({
-                "operation": "RETURN_RESERVATION",
-                "reservationUid": str(reservation_uid),
-                "user": x_user_name,
-                "condition": body.condition,
-                "date": body.date.isoformat(),
-            })
-            return Response(status_code=204)
-
-        return rating_data
-
-    new_stars = max(1, min(100, rating_data["stars"] + delta))
+    if status_response.status_code not in (200, 204):
+        raise HTTPException(
+            status_code=status_response.status_code,
+            detail=status_response.text,
+        )
 
     try:
         status_response = httpx.post(
@@ -648,23 +645,36 @@ def return_reservation(reservation_uid: UUID, body: ReturnRequest, x_user_name: 
 
     # 6. Книга возвращена. Теперь обновляем рейтинг.
     try:
-        rating_response = httpx.patch(
+        rating_data = httpx.get(
             f"{RATING_SERVICE_URL}/api/v1/rating",
             headers=headers,
-            json={"stars": new_stars},
             timeout=5.0,
         )
     except httpx.RequestError:
-        rating_response = None
+        rating_data = None
 
-    # Если Rating недоступен — ставим в очередь ТОЛЬКО рейтинг.
-    if rating_response is None or rating_response.status_code >= 500:
+    if rating_data is None or rating_data.status_code >= 500:
         publish_operation({
-            "operation": "UPDATE_RATING",
+            "operation": "UPDATE_RATING_DELTA",
             "user": x_user_name,
-            "newStars": new_stars,
+            "delta": delta,
         })
         return Response(status_code=204)
+
+    if rating_data.status_code != 200:
+        raise HTTPException(
+            status_code=rating_data.status_code,
+            detail=rating_data.text,
+        )
+
+    new_stars = max(1, min(100, rating_data.json()["stars"] + delta),)
+
+    rating_response = httpx.patch(
+        f"{RATING_SERVICE_URL}/api/v1/rating",
+        headers=headers,
+        json={"stars": new_stars},
+        timeout=5.0,
+    )
 
     if rating_response.status_code not in (200, 204):
         raise HTTPException(
