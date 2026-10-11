@@ -265,6 +265,9 @@ def create_reservation(body: ReservationRequest, x_user_name: str = Header(..., 
         fallback={},
         critical=True,
     )
+    if isinstance(rating_response, Response):
+        return rating_response
+        
     stars = rating_response["stars"]
     
     reservations = get_with_circuit_breaker(
